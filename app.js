@@ -1,9 +1,11 @@
 require('dotenv').config();
 const { default: makeWASocket } = require('@whiskeysockets/Baileys');
-const { useMultiFileAuthState } = require('@ArabDevs/Baileys');
+const { useMultiFileAuthState } = require('@whiskeysockets/Baileys'); // تم التعديل هنا
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+
+// ... (باقي الكود يبقى كما هو بدون تغيير)
 
 // إعدادات البوت
 const config = {
