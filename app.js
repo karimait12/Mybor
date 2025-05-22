@@ -1,19 +1,18 @@
 require('dotenv').config();
 const { default: makeWASocket } = require('@whiskeysockets/Baileys');
-const { useMultiFileAuthState } = require('@whiskeysockets/Baileys');
+const { useSingleFileAuthState } = require('@whiskeysockets/Baileys');
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
 
 // إعدادات البوت
 const config = {
-  sessionFolder: 'auth_info',
+  authFile: 'creds.json', // استخدام ملف creds.json مباشرة
   botName: process.env.BOT_NAME || 'MyBot',
-  adminNumber: process.env.ADMIN_NUMBER || '212710329510', // رقم المشرف
-  pairingPhoneNumber: process.env.PAIRING_NUMBER || '212679894168'
+  adminNumber: process.env.ADMIN_NUMBER || '20123456789'
 };
 
-let sock; // تعريف متغير السوكيت خارج الدوال
+let sock; // متغير السوكيت العام
 
 async function sendAdminMessage(message) {
   try {
@@ -34,61 +33,60 @@ async function initWhatsApp() {
   try {
     console.log('🚀 جاري تهيئة اتصال واتساب...');
     
-    const { state, saveCreds } = await useMultiFileAuthState(config.sessionFolder);
+    // استخدام ملف creds.json مباشرة
+    const { state, saveState } = useSingleFileAuthState(config.authFile);
     
     sock = makeWASocket({
       auth: state,
       printQRInTerminal: false,
       browser: ['Ubuntu', config.botName, '1.0.0'],
       logger: pino({ level: 'silent' }),
-      connectTimeoutMs: 30000
+      connectTimeoutMs: 30000,
+      shouldIgnoreJid: jid => jid === 'status@broadcast'
     });
 
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect } = update;
       
       if (connection === 'open') {
-        console.log('✅ تم الاتصال بنجاح!');
+        console.log('✅ تم الاتصال بنجاح باستخدام الجلسة المحفوظة!');
         
-        // إرسال رسالة إلى المشرف عند الاتصال الناجح
+        // إرسال رسالة إلى المشرف
         await sendAdminMessage(
           `🔔 إشعار تشغيل البوت\n\n` +
           `✅ تم الاتصال بنجاح\n` +
           `🖥️ اسم البوت: ${config.botName}\n` +
-          `⏰ وقت التشغيل: ${new Date().toLocaleString()}\n\n` +
-          `📱 رقم البوت: ${config.pairingPhoneNumber}`
+          `⏰ وقت التشغيل: ${new Date().toLocaleString()}\n` +
+          `📱 رقم البوت: ${sock.user?.id.split(':')[0] || 'غير معروف'}`
         );
       }
       
       if (connection === 'close') {
-        console.log('🔄 محاولة إعادة الاتصال...');
-        setTimeout(initWhatsApp, 5000);
-      }
-
-      if (!sock.authState.creds.registered && !fs.existsSync(path.join(config.sessionFolder, 'creds.json'))) {
-        try {
-          console.log(`📱 جاري طلب رمز الاقتران للرقم: ${config.pairingPhoneNumber}`);
-          const code = await sock.requestPairingCode(config.pairingPhoneNumber);
-          
-          console.log('\n══════════════════════════════');
-          console.log('🔢 رمز الاقتران:', code);
-          console.log('══════════════════════════════\n');
-          
-          // إرسال رمز الاقتران إلى المشرف
-          await sendAdminMessage(
-            `🔐 رمز اقتران جديد\n\n` +
-            `📱 رقم البوت: ${config.pairingPhoneNumber}\n` +
-            `🔢 رمز الاقتران: ${code}\n\n` +
-            `الرجاء إدخال هذا الرمز في واتساب > إعدادات > الأجهزة المرتبطة`
-          );
-          
-        } catch (error) {
-          console.error('❌ فشل طلب رمز الاقتران:', error.message);
+        const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
+        if (shouldReconnect) {
+          console.log('🔄 محاولة إعادة الاتصال...');
+          setTimeout(initWhatsApp, 5000);
+        } else {
+          console.log('❌ خطأ في المصادقة، يلزم إعادة الاقتران');
+          fs.unlinkSync(config.authFile); // حذف ملف الجلسة إذا كان غير صالح
         }
       }
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    // معالجة الرسائل الواردة
+    sock.ev.on('messages.upsert', ({ messages }) => {
+      messages.forEach(msg => {
+        if (msg.message?.conversation) {
+          console.log(`📩 رسالة من ${msg.key.remoteJid}: ${msg.message.conversation}`);
+        }
+      });
+    });
+
+    // حفظ تحديثات الجلسة
+    sock.ev.on('creds.update', () => {
+      saveState();
+      console.log('💾 تم حفظ تحديثات الجلسة');
+    });
 
   } catch (error) {
     console.error('🔥 خطأ في التهيئة:', error.message);
@@ -103,5 +101,11 @@ initWhatsApp();
 process.on('SIGTERM', async () => {
   console.log('🛑 إيقاف البوت...');
   await sendAdminMessage('🛑 تم إيقاف البوت');
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('🛑 تم إيقاف البوت بواسطة المستخدم');
+  await sendAdminMessage('🛑 تم إيقاف البوت يدوياً');
   process.exit(0);
 });
