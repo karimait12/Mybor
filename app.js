@@ -1,17 +1,16 @@
 require('dotenv').config();
 const { default: makeWASocket } = require('@whiskeysockets/Baileys');
-const { useMultiFileAuthState } = require('@whiskeysockets/Baileys'); // تم التعديل هنا
+const { useMultiFileAuthState } = require('@whiskeysockets/Baileys');
+const pino = require('pino'); // أضف هذا السطر
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-
-// ... (باقي الكود يبقى كما هو بدون تغيير)
 
 // إعدادات البوت
 const config = {
   sessionFolder: 'auth_info',
   botName: process.env.BOT_NAME || 'البوت الذكي',
-  adminNumber: process.env.ADMIN_NUMBER || '212679894168'
+  adminNumber: process.env.ADMIN_NUMBER || '20123456789'
 };
 
 // إنشاء واجهة إدخال
@@ -32,8 +31,10 @@ async function initWhatsApp() {
       auth: state,
       printQRInTerminal: false,
       browser: ['Ubuntu', config.botName, '1.0.0'],
-      logger: console
+      logger: pino({ level: 'silent' }) // استبدل هذا السطر
     });
+
+    // ... (باقي الكود يبقى كما هو)
 
     // معالجة أحداث الاتصال
     sock.ev.on('connection.update', handleConnectionUpdate(sock, saveCreds));
