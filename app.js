@@ -7,9 +7,9 @@ const path = require('path');
 
 // إعدادات البوت
 const config = {
-  authFile: 'creds.json', // استخدام ملف creds.json مباشرة
+  authFile: './sessions/creds.json',  // استخدام ملف creds.json مباشرة
   botName: process.env.BOT_NAME || 'MyBot',
-  adminNumber: process.env.ADMIN_NUMBER || '20123456789'
+  adminNumber: process.env.ADMIN_NUMBER || '21279894168'
 };
 
 let sock; // متغير السوكيت العام
